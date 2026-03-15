@@ -45,13 +45,15 @@ Build and run it. Understand what each line does.
 then run it with a custom command.
 ![alt text](image-7.png)
 ![alt text](image-8.png)
- What happens?
+
+What happens?
 👉 CMD can be overridden
 
 2. Create an image with `ENTRYPOINT ["echo"]` — run it,
 ![alt text](image-10.png)
 then run it with additional arguments.
 ![alt text](image-11.png)
+
 What happens?
 👉 ENTRYPOINT always runs
 
