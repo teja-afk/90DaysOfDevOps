@@ -17,6 +17,7 @@ You will:
 2. List all images on your machine — note the sizes
 ![alt text](image-2.png)
 3. Compare `ubuntu` vs `alpine` — why is one much smaller?
+   
 | Image  | Size       | Reason                     |
 |--------|------------|----------------------------|
 | Ubuntu | Large      | Full OS Packages           |
