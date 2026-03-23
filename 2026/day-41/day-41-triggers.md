@@ -5,6 +5,12 @@ Your pipeline runs on push. Today you learn **every way to trigger a workflow** 
 
 ---
 
+## Expected Output
+- New workflow files in your `github-actions-practice` repo
+- A markdown file: `day-41-triggers.md`
+
+---
+
 ## Challenge Tasks
 
 ### Task 1: Trigger on Pull Request
@@ -14,27 +20,7 @@ Your pipeline runs on push. Today you learn **every way to trigger a workflow** 
 4. Create a new branch, push a commit, and open a PR
 5. Watch the workflow run automatically
 
-```yaml
----
-name: PR Check
-
-on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-
-jobs:
-  pr-job:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Print branch name
-        run: echo "PR check running for branch:"${{ github.head_ref }}
-```
-![alt text](image.png)
+**Verify:** Does it show up on the PR page?
 
 ---
 
@@ -51,27 +37,7 @@ jobs:
 3. Print the input value in a step
 4. Go to the **Actions** tab → find the workflow → click **Run workflow**
 
-```yaml
----
-name: Manual trigger
-
-on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "Enter environment"
-        required: true
-        default: "staging"
-
-jobs:
-  manual-jobs:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Print input
-        run: echo "Environment is ${{ github.event.inputs.environment }}"
-```
-![alt text](image-1.png)
+**Verify:** Can you trigger it manually and see your input printed?
 
 ---
 
@@ -84,60 +50,12 @@ Create `.github/workflows/matrix.yml` that:
 
 Then extend the matrix to also include 2 operating systems — how many total jobs run now?
 
-```yaml
----
-name: Matrix Build
-
-on:
-  push:
-
-jobs:
-  build:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: [3.11, 3.12, 3.13]
-
-        exclude:
-          - os: windows-latest
-            python-version: 3.11
-
-    steps:
-      - name: setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version  }}
-
-      - name: Fail on purpose
-        run: |
-          python -version
-          exit 1
-```
-![alt text](image-2.png)
-
 ---
 
 ### Task 5: Exclude & Fail-Fast
 1. In your matrix, **exclude** one specific combination (e.g., Python 3.10 on Windows)
 2. Set `fail-fast: false` — trigger a failure in one job and observe what happens to the rest
 3. Write in your notes: What does `fail-fast: true` (the default) do vs `false`?
-
-```yaml
-strategy:
-      fail-fast: false
-
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: [3.11, 3.12, 3.13]
-
-        exclude:
-          - os: windows-latest
-            python-version: 3.11
-```
 
 ---
 
@@ -147,6 +65,20 @@ strategy:
 - Manual trigger: `on: workflow_dispatch: inputs:`
 - Matrix: `strategy: matrix: python-version: [...]`
 - Exclude: `exclude: - os: windows-latest python-version: "3.10"`
+
+---
+
+## Documentation
+Create `day-41-triggers.md` with:
+- Each workflow YAML
+- Screenshots of runs
+- The cron expression answer from Task 2
+
+---
+
+## Submission
+1. Add `day-41-triggers.md` to `2026/day-41/`
+2. Commit and push to your fork
 
 ---
 
