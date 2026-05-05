@@ -18,14 +18,27 @@ By the end of today, you will have created real AWS resources using nothing but 
 ## Challenge Tasks
 
 ### Task 1: Understand Infrastructure as Code
-Before touching the terminal, research and write short notes on:
 
 1. What is Infrastructure as Code (IaC)? Why does it matter in DevOps?
-2. What problems does IaC solve compared to manually creating resources in the AWS console?
-3. How is Terraform different from AWS CloudFormation, Ansible, and Pulumi?
-4. What does it mean that Terraform is "declarative" and "cloud-agnostic"?
+- In DevOps, IaC matters because it bridges the gap between development and operations, enabling Continuous Integration/Continuous Delivery (CI/CD) pipelines to automatically deploy infrastructure alongside application code.  This approach eliminates manual errors, prevents environment drift (where development and production settings diverge), and allows teams to rapidly spin up consistent, production-like environments for testing, thereby accelerating deployment cycles and improving system reliability.
 
-Write this in your own words -- not copy-pasted definitions.
+2. What problems does IaC solve compared to manually creating resources in the AWS console?
+- Key problems resolved include:
+- **Configuration Drift:** Manual "quick fixes" in the console cause actual infrastructure to diverge from intended states; IaC enforces the desired state automatically. 
+- **Security Gaps:** Manual processes often lead to forgotten parameter changes or misconfigured security groups; IaC enables "shift-left" security validation before deployment. 
+- **Operational Debt:** Manual setup is time-consuming and error-prone; IaC automates provisioning, reducing deployment time from days to minutes and enabling rapid disaster recovery.
+- **Compliance Failures:** Manual clicks lack the rigorous change management evidence required for standards like SOC 2 or HIPAA; IaC provides a clear Git history of who changed what and why. 
+- **Scalability Issues:** Managing resources manually scales exponentially with complexity; IaC scales linearly, allowing identical configurations to be deployed across hundreds of environments effortlessly. 
+
+3. How is Terraform different from AWS CloudFormation, Ansible, and Pulumi?
+- Terraform is a cloud-agnostic Infrastructure as Code (IaC) tool that uses HashiCorp Configuration Language (HCL) to provision resources across multiple providers via a declarative approach.  AWS CloudFormation is similar in its declarative, provisioning nature but is limited to AWS resources and uses YAML/JSON. 
+
+- Ansible differs fundamentally as an imperative, agentless configuration management tool that uses SSH to install software and manage settings on existing servers, rather than provisioning the infrastructure itself.  Pulumi is also a multi-cloud IaC tool like Terraform but allows developers to define infrastructure using general-purpose programming languages (e.g., Python, TypeScript) instead of a domain-specific language. 
+
+4. What does it mean that Terraform is "declarative" and "cloud-agnostic"?
+- Declarative means that Terraform uses a configuration language (HCL) where you define the desired end state of your infrastructure rather than specifying the exact sequence of steps to achieve it.  Terraform analyzes this desired state, compares it against the current infrastructure, and automatically determines the necessary actions to converge the system to that target, handling dependencies and execution order internally. 
+
+- Cloud-agnostic indicates that Terraform is not tied to a single provider; it can manage resources across AWS, Azure, Google Cloud, Kubernetes, and on-premises environments using a single tool and consistent syntax.  This is achieved through providers, which are plugins that translate Terraform’s declarative configuration into specific API calls for each supported platform, allowing teams to avoid vendor lock-in and manage multi-cloud architectures with unified workflows. 
 
 ---
 
@@ -61,7 +74,7 @@ aws configure
 aws sts get-caller-identity
 ```
 
-You should see your AWS account ID and ARN.
+![alt text](image.png)
 
 ---
 
@@ -77,16 +90,56 @@ Create a file called `main.tf` with:
 2. A `provider "aws"` block with your region
 3. A `resource "aws_s3_bucket"` that creates a bucket with a globally unique name
 
+```bash
+terraform {
+        required_providers {
+                aws = {
+                        source = "hashicorp/aws"
+                        version = "~> 6.0"
+                }
+        }
+}
+
+# Configure AWS provider
+provider aws {
+        region = "us-west-1"
+}
+
+resource aws_s3_bucket my_s3_bucket {
+        bucket = "teja-terraform-demo-unique-12345"
+
+        tags = {
+                Name = "my-bucket"
+                Environment = "dev"
+        }
+}
+```
+
 Run the Terraform lifecycle:
 ```bash
 terraform init      # Download the AWS provider
 terraform plan      # Preview what will be created
 terraform apply     # Create the bucket (type 'yes' to confirm)
 ```
+![alt text](image-2.png)
+![alt text](image-3.png)
+![alt text](image-1.png)
 
 Go to the AWS S3 console and verify your bucket exists.
+![alt text](image-4.png)
+
 
 **Document:** What did `terraform init` download? What does the `.terraform/` directory contain?
+
+terraform init downloads: The AWS provider plugin from HashiCorp registry
+
+Specifically:
+hashicorp/aws provider (binary executable)
+
+👉 This plugin allows Terraform to:
+
+Communicate with AWS APIs
+Create/manage resources like S3, EC2, etc.
 
 ---
 
@@ -96,15 +149,31 @@ In the same `main.tf`, add:
 2. Set instance type to `t2.micro`
 3. Add a tag: `Name = "TerraWeek-Day1"`
 
+```bash
+resource aws_instance my_instance {
+	ami = "ami-0d43f0bb92e485897"
+	instance_type = "t3.micro"
+
+	tags = {
+		Name = "TerraWeek-Day1"
+	}
+}
+```
+
 Run:
 ```bash
 terraform plan      # You should see 1 resource to add (bucket already exists)
 terraform apply
 ```
 
+![alt text](image-5.png)
+
 Go to the AWS EC2 console and verify your instance is running with the correct name tag.
 
+![alt text](image-6.png)
+
 **Document:** How does Terraform know the S3 bucket already exists and only the EC2 instance needs to be created?
+Terraform uses a concept called state management.
 
 ---
 
@@ -121,9 +190,53 @@ terraform state show aws_instance.<name>
 ```
 
 3. Answer these questions in your notes:
-   - What information does the state file store about each resource?
-   - Why should you never manually edit the state file?
-   - Why should the state file not be committed to Git?
+- What information does the state file store about each resource?
+
+   - Terraform state stores complete metadata of resources, including:
+
+   - Resource type (e.g., aws_instance)
+   - Resource name
+   - Unique IDs (e.g., EC2 instance ID)
+   - Configuration attributes (AMI, instance type, etc.)
+   - Tags
+   - Dependencies between resources
+   - Provider details
+
+   👉 Essentially:
+
+   - It is Terraform’s source of truth for infrastructure
+
+- Why should you never manually edit the state file?
+
+   - It can corrupt Terraform’s understanding of infrastructure
+   - May cause:
+      - Duplicate resource creation
+      - Resource deletion
+      - Drift issues
+
+⚠️ Even a small JSON mistake can break everything
+
+👉 Instead use:
+```
+terraform state rm
+terraform import
+terraform state mv
+```
+- Why should the state file not be committed to Git?
+   - Because it contains sensitive data:
+      - Resource IDs
+      - Public/private IPs
+      - Possibly credentials (in some providers)
+      - Infrastructure topology
+
+   👉 Risk:
+
+      - Security exposure
+      - Infrastructure compromise
+
+   ✔ Best Practice:
+
+      - Use remote backend (S3 + DynamoDB locking)
 
 ---
 
@@ -131,13 +244,19 @@ terraform state show aws_instance.<name>
 1. Change the EC2 instance tag from `"TerraWeek-Day1"` to `"TerraWeek-Modified"` in your `main.tf`
 2. Run `terraform plan` and read the output carefully:
    - What do the `~`, `+`, and `-` symbols mean?
+   ![alt text](image-8.png)
+   +, -, ~ represent create, destroy, and update respectively
    - Is this an in-place update or a destroy-and-recreate?
+   in-place update
 3. Apply the change
+   ![alt text](image-9.png)
 4. Verify the tag changed in the AWS console
+   ![alt text](image-10.png)
 5. Finally, destroy everything:
 ```bash
 terraform destroy
 ```
+![alt text](image-11.png)
 6. Verify in the AWS console -- both the S3 bucket and EC2 instance should be gone
 
 ---
@@ -150,21 +269,6 @@ terraform destroy
 - The `.terraform/` directory contains downloaded provider plugins
 - Add `*.tfstate`, `*.tfstate.backup`, and `.terraform/` to your `.gitignore`
 
----
-
-## Documentation
-Create `day-61-terraform-intro.md` with:
-- IaC explanation in your own words (3-4 sentences)
-- Screenshot of `terraform apply` creating your S3 bucket and EC2 instance
-- Screenshot of the resources in the AWS console
-- What each Terraform command does (init, plan, apply, destroy, show, state list)
-- What the state file contains and why it matters
-
----
-
-## Submission
-1. Add `day-61-terraform-intro.md` to `2026/day-61/`
-2. Commit and push to your fork
 
 ---
 
