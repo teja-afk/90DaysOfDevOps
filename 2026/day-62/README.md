@@ -22,8 +22,25 @@ Understanding dependencies is what separates a Terraform beginner from someone w
    - Define the `terraform` block with `required_providers` pinning the AWS provider to version `~> 5.0`
    - Define the `provider "aws"` block with your region
 3. Run `terraform init` and check the output -- what version was installed?
-4. Read the provider lock file `.terraform.lock.hcl` -- what does it do?
 
+```
+terraform {
+	required_providers {
+		aws = {
+			source = "hashicorp/aws"
+			version = "~>5.0"
+		}
+	}
+}
+
+provider aws {
+	region = "us-west-1"
+}
+```
+![alt text](image.png)
+
+4. Read the provider lock file `.terraform.lock.hcl` -- what does it do?
+![alt text](image-1.png)
 **Document:** What does `~> 5.0` mean? How is it different from `>= 5.0` and `= 5.0.0`?
 
 ---
@@ -39,8 +56,14 @@ Create a `main.tf` and define these resources one by one:
 
 Run `terraform plan` -- you should see 5 resources to create.
 
+![alt text](image-2.png)
+![alt text](image-3.png)
+
 **Verify:** Apply and check the AWS VPC console. Can you see all five resources connected?
 
+![alt text](image-4.png)
+![alt text](image-5.png)
+![alt text](image-6.png)
 ---
 
 ### Task 3: Understand Implicit Dependencies
@@ -52,8 +75,26 @@ Look at your `main.tf` carefully:
 
 Answer these questions:
 - How does Terraform know to create the VPC before the subnet?
+   - Terraform builds a dependency graph by analyzing references between resources.
+   ```hcl
+   vpc_id = aws_vpc.terraweek_vpc.id
+   ```
+   Here, the subnet is using the ID of the VPC resource.
+
+   **Terraform understands:**
+
+   - aws_subnet.public_subnet needs the VPC ID
+   - The VPC ID will only exist after the VPC is created
+   - Therefore, VPC must be created first
 - What would happen if you tried to create the subnet before the VPC existed?
+   - AWS would reject the request because a subnet cannot exist without a VPC.
 - Find all implicit dependencies in your config and list them
+   - Dependency 1 — Subnet depends on VPC
+   - Dependency 2 — Internet Gateway depends on VPC
+   - Dependency 3 — Route Table depends on VPC
+   - Dependency 4 — Route inside Route Table depends on Internet Gateway
+   - Dependency 5 — Route Table Association depends on Subnet
+   - Dependency 6 — Route Table Association depends on Route Table
 
 ---
 
@@ -72,6 +113,106 @@ Add to your config:
    - Associate the security group
    - Set `associate_public_ip_address = true`
    - Tag: `"TerraWeek-Server"`
+
+```hcl
+# BUILD a VPC from Scratch
+
+# 1. VPC
+resource aws_vpc terraweek_vpc {
+	cidr_block = "10.0.0.0/16"
+	tags = {
+		Name = "TerraWeek-VPC"
+	}
+}
+
+# 2. Public Subnet
+resource aws_subnet public_subnet {
+	vpc_id = aws_vpc.terraweek_vpc.id
+	map_public_ip_on_launch = true
+	cidr_block="10.0.1.0/24"
+	tags = {
+		Name = "TerraWeek-Public-Subnet"
+	}
+}
+
+# 3. Internet Gateway
+resource aws_internet_gateway igw {
+	vpc_id = aws_vpc.terraweek_vpc.id
+	
+	tags = {
+		Name = "TerraWeek-IGW"
+	}
+}
+
+# 4. Route Table
+resource aws_route_table public_rt {
+	vpc_id = aws_vpc.terraweek_vpc.id
+	
+	route {
+		cidr_block = "0.0.0.0/0"
+		gateway_id = aws_internet_gateway.igw.id
+	}
+
+	tags = {
+		Name = "TerraWeek-Public-RT"
+	}
+}
+
+# 5. Route Table Association
+resource aws_route_table_association public_assoc {
+	subnet_id = aws_subnet.public_subnet.id
+	route_table_id = aws_route_table.public_rt.id
+}
+
+# 6. Security Group
+resource aws_security_group terraweek_sg {
+	name = "terraweek-sg"
+	description = "Allow SSH and HTTP"
+	vpc_id = aws_vpc.terraweek_vpc.id
+
+	# SSH Access
+	ingress {
+		description= "SSH"
+		from_port = 22
+		to_port = 22
+		protocol = "tcp"
+		cidr_blocks = ["0.0.0.0/0"]
+	}
+	
+	# HTTP Acess
+	ingress {
+		description = "HTTP"
+		from_port = 80
+		to_port = 80
+		protocol = "tcp"
+		cidr_blocks = ["0.0.0.0/0"]
+	}
+
+	# Outbound Traffic
+	egress {
+		from_port = 0
+		to_port = 0
+		protocol = "-1"
+		cidr_blocks = ["0.0.0.0/0"]
+	}
+	
+	tags = {
+		Name = "TerraWeek-SG"
+	}
+}
+
+# 7. EC2 Instance
+resource aws_instance terraweek_server {
+	ami = "ami-0d43f0bb92e485897"
+	instance_type = "t3.micro"
+   subnet_id = aws_subnet.public_subnet.id
+	vpc_security_group_ids = [aws_security_group.terraweek_sg.id]
+	associate_public_ip_address = true
+	tags = {
+		Name = "TerraWeek-Server"
+	}
+}
+```
 
 Apply and verify -- your EC2 instance should have a public IP and be reachable.
 
@@ -115,6 +256,14 @@ terraform destroy
 
 **Document:** What are the three lifecycle arguments (`create_before_destroy`, `prevent_destroy`, `ignore_changes`) and when would you use each?
 
+## Lifecycle Summary Table
+| Argument                | Purpose                            | Common Use Case                        |
+| ----------------------- | ---------------------------------- | -------------------------------------- |
+| `create_before_destroy` | Reduce downtime during replacement | Production servers                     |
+| `prevent_destroy`       | Block accidental deletion          | Databases, critical infra              |
+| `ignore_changes`        | Ignore external modifications      | Autoscaling, external management tools |
+
+
 ---
 
 ## Hints
@@ -124,22 +273,6 @@ terraform destroy
 - If you cannot SSH into the instance, check: security group rules, public IP, route table, internet gateway
 - `terraform graph` outputs DOT format -- paste it into webgraphviz.com if you don't have Graphviz
 - Always destroy resources when done to avoid AWS charges
-
----
-
-## Documentation
-Create `day-62-providers-resources.md` with:
-- Your full `main.tf` with comments explaining each resource
-- Screenshot of `terraform apply` output
-- Screenshot of the VPC and its resources in the AWS console
-- The dependency graph (image or text)
-- Explanation of implicit vs explicit dependencies in your own words
-
----
-
-## Submission
-1. Add `day-62-providers-resources.md` to `2026/day-62/`
-2. Commit and push to your fork
 
 ---
 
